@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporte de indicadores · SicaCenter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1f2430;--mut:#6b7280;--bd:#e5e7eb;--ac:#ed7d31;--ac2:#fff3ea;--ok:#16a34a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161c;--card:#1c1f27;--tx:#eceef3;--mut:#9aa3b2;--bd:#2c313c;--ac2:#2a2018}}
+:root[data-theme="dark"]{--bg:#14161c;--card:#1c1f27;--tx:#eceef3;--mut:#9aa3b2;--bd:#2c313c;--ac2:#2a2018}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.drop{border:2px dashed var(--bd);border-radius:12px;padding:26px;text-align:center;cursor:pointer;transition:.15s}
+.drop:hover,.drop.on{border-color:var(--ac);background:var(--ac2)}
+.drop b{display:block;font-size:16px}.drop span{color:var(--mut);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+label{font-size:12px;color:var(--mut);display:block;margin-bottom:4px}
+select,button{font:inherit;padding:9px 12px;border-radius:9px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button{cursor:pointer}button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+#st{color:var(--mut);font-size:13px;margin-top:10px;min-height:18px}#st.err{color:#dc2626}
+table{width:100%;border-collapse:collapse}
+th{background:var(--ac);color:#fff;text-align:left;padding:9px 12px;font-size:14px}
+th:last-child,td:last-child{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid var(--bd)}
+td small{display:block;color:var(--mut);font-weight:400}
+tr.s td:first-child{font-weight:600}tr.m td:first-child{padding-left:26px}
+.hint{font-size:12px;color:var(--mut);margin-top:12px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reporte de indicadores · SicaCenter</h1>
+  <p class="sub">Sube el consolidado (.xlsb / .xlsx), elige el mes y obtén el reporte con datos únicos.</p>
+
+  <div class="card">
+    <div class="drop" id="drop"><b>Arrastra el archivo aquí o haz clic para seleccionarlo</b><span>Consolidado_BDWIN (.xlsb, .xlsx) · se procesa en tu navegador, no se sube a ningún servidor</span></div>
+    <input type="file" id="file" accept=".xlsb,.xlsx,.xlsm,.xls" class="hide">
+    <div id="st"></div>
+  </div>
+
+  <div class="card hide" id="ctl">
+    <div class="row">
+      <div><label>Mes</label><select id="mes"></select></div>
+      <div><label>Base de los porcentajes</label>
+        <select id="modo"><option value="c">En cascada (vs. indicador anterior)</option><option value="r">Todo sobre Recorrido</option></select></div>
+      <button id="cp">Copiar tabla</button>
+      <button id="ex" class="p">Exportar Excel</button>
+    </div>
+  </div>
+
+  <div class="card hide" id="res">
+    <table><thead><tr><th>INDICADORES</th><th>TOTAL</th></tr></thead><tbody id="tb"></tbody></table>
+    <div class="hint" id="nota"></div>
+  </div>
+</div>
+
+<script>
+//#CORE
+const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
+const norm=s=>String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+const digits=v=>String(v==null?'':v).replace(/\D/g,'');
+function ymOf(v){
+  if(v==null||v==='')return -1;
+  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*864e5));return d.getUTCFullYear()*12+d.getUTCMonth();}
+  const s=String(v).trim(),m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return +m[3]*12+(+m[2]-1);
+  if(/^\d+(\.\d+)?$/.test(s))return ymOf(parseFloat(s));
+  return -1;
+}
+// [rank, tipo(0 sin dato,1 no contacto,2 contacto no efectivo,3 contacto efectivo), motivo]
+const CE=new Set(['no desea-producto','cliente retenido - precio','cliente retenido - velocidad','cliente retenido - promocion','conforme con su operador','cliente no permite brindar informacion']);
+const CNE=new Set(['corta llamada','ya cuenta con servicio activo','preventa en proceso','cliente de baja']);
+const INEX=new Set(['fuera de servicio','not found','disconnected number auto']);
+const NOC=new Set(['no contesta','llamada muda','casilla de voz']);
+const _cc=new Map();
+function classify(t){
+  t=norm(t);let c=_cc.get(t);if(c)return c;
+  if(t==='venta')c=[9,3,'venta'];
+  else if(t==='agendado')c=[8,3,'agendado'];
+  else if(t==='no desea-precio')c=[7,3,'precio'];
+  else if(CE.has(t))c=[6,3,'otros'];
+  else if(t==='sin cobertura')c=[5,2,'cobertura'];
+  else if(t==='cliente con deuda')c=[5,2,'deuda'];
+  else if(CNE.has(t))c=[4,2,'otros'];
+  else if(INEX.has(t))c=[2,1,'inexistente'];
+  else if(NOC.has(t))c=[1,1,'nocontacto'];
+  else c=[0,0,''];
+  _cc.set(t,c);return c;
+}
+const toRows=ws=>XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:false});
+function col(h,names){const n=h.map(norm);for(const x of names){const i=n.indexOf(norm(x));if(i>=0)return i;}return -1;}
+function findSheet(names,wanted){const w=norm(wanted);return names.find(n=>norm(n)===w);}
+
+function buildSica(rows){
+  const h=rows[0]||[],cP=col(h,['Teléfono llamado','Telefono']),cI=col(h,['Fecha de inicio PC']),cF=col(h,['Fecha de fin PC']),cU=col(h,['Usuario']),cT=col(h,['Tipificación1','Tipificacion1']);
+  if(cP<0||cI<0||cT<0)throw new Error('Hoja SicaCenter: faltan columnas (Teléfono llamado, Fecha de inicio PC, Tipificación1).');
+  const seen=new Set(),recs=[],months=new Map();let dup=0;
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];if(!r)continue;
+    const ph=digits(r[cP]),ym=ymOf(r[cI]);if(!ph||ym<0)continue;
+    const k=ph+'|'+r[cI]+'|'+r[cF]+'|'+r[cU]+'|'+r[cT];
+    if(seen.has(k)){dup++;continue;}
+    seen.add(k);recs.push([ym,ph,classify(r[cT])]);months.set(ym,(months.get(ym)||0)+1);
+  }
+  return {recs,months,dup};
+}
+function buildBase(rows){
+  const h=rows[0]||[],c=col(h,['Telefono','Teléfono']);
+  if(c<0)throw new Error('Hoja Telefonos: falta la columna Telefono.');
+  const s=new Set();for(let i=1;i<rows.length;i++){const p=digits(rows[i]&&rows[i][c]);if(p)s.add(p);}
+  return s.size;
+}
+function buildVentas(rows){
+  const h=rows[0]||[],cF=col(h,['Fecha de registro']),cD=col(h,['N° doc cliente','Nº doc cliente','N doc cliente']),cT=col(h,['Telf. cliente']),cP=col(h,['Plan']);
+  if(cF<0||cP<0)return [];
+  const out=[];for(let i=1;i<rows.length;i++){const r=rows[i];if(!r)continue;const ym=ymOf(r[cF]);if(ym<0)continue;
+    out.push({ym,key:digits(cD>=0?r[cD]:'')||digits(cT>=0?r[cT]:''),plan:String(r[cP]==null?'(sin plan)':r[cP]).trim()});}
+  return out;
+}
+function compute(D,ym){
+  const best=new Map();let calls=0;
+  for(const x of D.sica.recs){if(x[0]!==ym)continue;calls++;const b=best.get(x[1]);if(!b||x[2][0]>b[0])best.set(x[1],x[2]);}
+  let con=0,efe=0,ven=0;const mo={cobertura:0,precio:0,deuda:0,otros:0,inexistente:0};
+  for(const c of best.values()){if(c[1]>=2)con++;if(c[1]===3)efe++;if(c[2]==='venta')ven++;else if(c[2] in mo)mo[c[2]]++;}
+  const of=new Map(),seen=new Set();
+  for(const v of D.ventas){if(v.ym!==ym)continue;const k=v.key||Math.random();if(seen.has(k))continue;seen.add(k);of.set(v.plan,(of.get(v.plan)||0)+1);}
+  return {bbdd:D.bbdd,rec:best.size,calls,con,efe,ven,mo,of,ofTotal:seen.size};
+}
+//#ENDCORE
+
+let D=null;
+const $=id=>document.getElementById(id),fmt=n=>Number(n).toLocaleString('es-PE'),pct=(a,b)=>b?(a/b*100).toFixed(1)+'%':'0.0%';
+const wait=()=>new Promise(r=>setTimeout(r,30));
+const st=(t,e)=>{$('st').textContent=t;$('st').className=e?'err':''};
+const mname=ym=>MESES[ym%12]+' '+Math.floor(ym/12);
+
+function table(){
+  const ym=+$('mes').value,casc=$('modo').value==='c',R=compute(D,ym);
+  const moT=Object.values(R.mo).reduce((a,b)=>a+b,0);
+  const ofTxt=[...R.of].sort((a,b)=>b[1]-a[1]).map(([p,n])=>p+' ('+n+')');
+  const rows=[
+    ['BBDD',fmt(R.bbdd)],['Recorrido',fmt(R.rec)],['Intensidad',R.rec?(R.calls/R.rec).toFixed(2):'0'],
+    ['Contacto Q',fmt(R.con)],['Contacto %',pct(R.con,R.rec)],
+    ['Contacto efectivo Q',fmt(R.efe)],['Contacto efectivo %',pct(R.efe,casc?R.con:R.rec)],
+    ['Ventas Q',fmt(R.ven)],['Ventas %',pct(R.ven,casc?R.efe:R.rec)],
+    ['Tipo de oferta vendida',ofTxt.length?ofTxt:'-'],
+    ['MOTIVOS DE NO VTA',fmt(moT)],['SIN COBERTURA',fmt(R.mo.cobertura)],['NO DESEA PRECIO',fmt(R.mo.precio)],
+    ['DEUDA',fmt(R.mo.deuda)],['OTROS',fmt(R.mo.otros)],['NUMEROS INEXISTENTES',fmt(R.mo.inexistente)]
+  ];
+  $('tb').innerHTML=rows.map((r,i)=>'<tr class="'+(i===10?'s':i>10?'m':'')+'"><td>'+r[0]+'</td><td>'+(Array.isArray(r[1])?r[1].join('<br>'):r[1])+'</td></tr>').join('');
+  $('nota').innerHTML='Datos únicos: '+fmt(D.sica.dup)+' llamadas duplicadas descartadas del libro; los indicadores Q cuentan teléfonos únicos del mes. '
+   +'Intensidad = llamadas únicas / teléfonos recorridos ('+fmt(R.calls)+' / '+fmt(R.rec)+'). '
+   +'Tipo de oferta: Reporte_VENTAS registradas en el mes ('+fmt(R.ofTotal)+' ventas únicas).';
+  return rows.map(r=>[r[0],Array.isArray(r[1])?r[1].join(' / '):r[1]]);
+}
+
+async function load(f){
+  try{
+    st('Leyendo archivo… (los libros grandes pueden tardar 1–2 minutos)');$('ctl').classList.add('hide');$('res').classList.add('hide');await wait();
+    const buf=await f.arrayBuffer();
+    const names=XLSX.read(buf,{type:'array',bookSheets:true}).SheetNames;
+    const need={sica:findSheet(names,'SicaCenter'),tel:findSheet(names,'Telefonos'),ven:findSheet(names,'Reporte_VENTAS')};
+    if(!need.sica)throw new Error('No se encontró la hoja "SicaCenter" en el archivo.');
+    st('Cargando hojas SicaCenter, Telefonos y Reporte_VENTAS…');await wait();
+    const wb=XLSX.read(buf,{type:'array',sheets:Object.values(need).filter(Boolean),dense:true});
+    st('Eliminando duplicados y clasificando llamadas…');await wait();
+    const sica=buildSica(toRows(wb.Sheets[need.sica]));
+    D={sica,bbdd:need.tel?buildBase(toRows(wb.Sheets[need.tel])):0,ventas:need.ven?buildVentas(toRows(wb.Sheets[need.ven])):[]};
+    const ms=[...sica.months.keys()].sort((a,b)=>b-a);
+    $('mes').innerHTML=ms.map(m=>'<option value="'+m+'">'+mname(m)+' ('+fmt(sica.months.get(m))+' llamadas)</option>').join('');
+    $('ctl').classList.remove('hide');$('res').classList.remove('hide');table();
+    st('Listo: '+f.name+' · '+fmt(sica.recs.length)+' llamadas únicas.');
+  }catch(e){console.error(e);st('Error: '+e.message,true);}
+}
+const fi=$('file'),dz=$('drop');
+dz.onclick=()=>fi.click();fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
+dz.ondragover=e=>{e.preventDefault();dz.classList.add('on')};dz.ondragleave=()=>dz.classList.remove('on');
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('on');e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])};
+$('mes').onchange=$('modo').onchange=table;
+$('cp').onclick=async()=>{
+  const t=table().map(r=>r.join('\t')).join('\n');
+  try{await navigator.clipboard.writeText(t);}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();}
+  st('Tabla copiada: pégala directo en Excel.');
+};
+$('ex').onclick=()=>{
+  const rows=[['INDICADORES','TOTAL'],...table()],ym=+$('mes').value;
+  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:28},{wch:48}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Reporte');
+  XLSX.writeFile(wb,'Reporte_SicaCenter_'+MESES[ym%12]+'_'+Math.floor(ym/12)+'.xlsx');
+};
+</script>
+</body>
+</html>
