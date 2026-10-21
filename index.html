@@ -4,58 +4,345 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reporte de indicadores · SicaCenter</title>
+<!-- Favicon SVG en línea dinámico acorde a la función de reportes e indicadores -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ed7d31' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2' ry='2'/><path d='M18 17V9'/><path d='M13 17V5'/><path d='M8 17v-3'/></svg>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-:root{--bg:#f6f7fb;--card:#fff;--tx:#1f2430;--mut:#6b7280;--bd:#e5e7eb;--ac:#ed7d31;--ac2:#fff3ea;--ok:#16a34a}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161c;--card:#1c1f27;--tx:#eceef3;--mut:#9aa3b2;--bd:#2c313c;--ac2:#2a2018}}
-:root[data-theme="dark"]{--bg:#14161c;--card:#1c1f27;--tx:#eceef3;--mut:#9aa3b2;--bd:#2c313c;--ac2:#2a2018}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.wrap{max-width:860px;margin:0 auto;padding:24px 16px 48px}
-h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.drop{border:2px dashed var(--bd);border-radius:12px;padding:26px;text-align:center;cursor:pointer;transition:.15s}
-.drop:hover,.drop.on{border-color:var(--ac);background:var(--ac2)}
-.drop b{display:block;font-size:16px}.drop span{color:var(--mut);font-size:13px}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
-label{font-size:12px;color:var(--mut);display:block;margin-bottom:4px}
-select,button{font:inherit;padding:9px 12px;border-radius:9px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
-button{cursor:pointer}button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
-button:disabled{opacity:.5;cursor:default}
-#st{color:var(--mut);font-size:13px;margin-top:10px;min-height:18px}#st.err{color:#dc2626}
-table{width:100%;border-collapse:collapse}
-th{background:var(--ac);color:#fff;text-align:left;padding:9px 12px;font-size:14px}
-th:last-child,td:last-child{text-align:right}
-td{padding:8px 12px;border-bottom:1px solid var(--bd)}
-td small{display:block;color:var(--mut);font-weight:400}
-tr.s td:first-child{font-weight:600}tr.m td:first-child{padding-left:26px}
-.hint{font-size:12px;color:var(--mut);margin-top:12px}
-.hide{display:none}
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --tx: #0f172a;
+  --mut: #64748b;
+  --bd: #e2e8f0;
+  --ac: #ed7d31;
+  --ac-hover: #d9691f;
+  --ac2: #fff7ed;
+  --ok: #16a34a;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --tx: #f8fafc;
+    --mut: #94a3b8;
+    --bd: #334155;
+    --ac2: #2d1e16;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --tx: #f8fafc;
+  --mut: #94a3b8;
+  --bd: #334155;
+  --ac2: #2d1e16;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 36px 20px 60px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.header-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--ac);
+  flex-shrink: 0;
+}
+h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.sub {
+  color: var(--mut);
+  margin: 4px 0 24px;
+  font-size: 14px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--bd);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s ease;
+}
+.drop {
+  border: 2px dashed var(--bd);
+  border-radius: 12px;
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+.drop:hover, .drop.on {
+  border-color: var(--ac);
+  background: var(--ac2);
+}
+.drop-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 12px;
+  color: var(--ac);
+  display: block;
+}
+.drop b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+  margin-bottom: 4px;
+}
+.drop span {
+  color: var(--mut);
+  font-size: 13px;
+  display: block;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+}
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mut);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+select, button {
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  color: var(--tx);
+  outline: none;
+  transition: all 0.15s ease;
+}
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+select:focus, button:focus {
+  border-color: var(--ac);
+  box-shadow: 0 0 0 3px rgba(237, 125, 49, 0.15);
+}
+button {
+  cursor: pointer;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+button:hover {
+  background: var(--bg);
+  border-color: var(--mut);
+}
+button.p {
+  background: var(--ac);
+  border-color: var(--ac);
+  color: #ffffff;
+  font-weight: 600;
+}
+button.p:hover {
+  background: var(--ac-hover);
+  border-color: var(--ac-hover);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-icon {
+  width: 16px;
+  height: 16px;
+}
+#st {
+  color: var(--mut);
+  font-size: 13px;
+  margin-top: 12px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#st.err {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--bd);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+th {
+  background: var(--ac);
+  color: #ffffff;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+th:last-child, td:last-child {
+  text-align: right;
+}
+td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--bd);
+  font-size: 13.5px;
+}
+tr:last-child td {
+  border-bottom: none;
+}
+tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.015);
+}
+td small {
+  display: block;
+  color: var(--mut);
+  font-weight: 400;
+  margin-top: 2px;
+}
+tr.s td {
+  background: rgba(237, 125, 49, 0.06) !important;
+}
+tr.s td:first-child {
+  font-weight: 700;
+  color: var(--ac);
+}
+tr.m td:first-child {
+  padding-left: 32px;
+  color: var(--mut);
+}
+.hint {
+  font-size: 12.5px;
+  color: var(--mut);
+  margin-top: 14px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--bd);
+}
+.hide {
+  display: none !important;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Reporte de indicadores · SicaCenter</h1>
+  <div class="header">
+    <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <path d="M18 17V9"/>
+      <path d="M13 17V5"/>
+      <path d="M8 17v-3"/>
+    </svg>
+    <h1>Reporte de indicadores · SicaCenter</h1>
+  </div>
   <p class="sub">Sube el consolidado (.xlsb / .xlsx), elige el mes y obtén el reporte con datos únicos.</p>
 
   <div class="card">
-    <div class="drop" id="drop"><b>Arrastra el archivo aquí o haz clic para seleccionarlo</b><span>Consolidado_BDWIN (.xlsb, .xlsx) · se procesa en tu navegador, no se sube a ningún servidor</span></div>
+    <div class="drop" id="drop">
+      <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <b>Arrastra el archivo aquí o haz clic para seleccionarlo</b>
+      <span>Consolidado_BDWIN (.xlsb, .xlsx) · se procesa en tu navegador, no se sube a ningún servidor</span>
+    </div>
     <input type="file" id="file" accept=".xlsb,.xlsx,.xlsm,.xls" class="hide">
     <div id="st"></div>
   </div>
 
   <div class="card hide" id="ctl">
     <div class="row">
-      <div><label>Mes</label><select id="mes"></select></div>
-      <div><label>Base de los porcentajes</label>
-        <select id="modo"><option value="c">En cascada (vs. indicador anterior)</option><option value="r">Todo sobre Recorrido</option></select></div>
-      <button id="cp">Copiar tabla</button>
-      <button id="ex" class="p">Exportar Excel</button>
+      <div class="field-group">
+        <label>Mes</label>
+        <select id="mes"></select>
+      </div>
+      <div class="field-group">
+        <label>Base de los porcentajes</label>
+        <select id="modo">
+          <option value="c">En cascada (vs. indicador anterior)</option>
+          <option value="r">Todo sobre Recorrido</option>
+        </select>
+      </div>
+      <button id="cp">
+        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        Copiar tabla
+      </button>
+      <button id="ex" class="p">
+        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Exportar Excel
+      </button>
     </div>
   </div>
 
   <div class="card hide" id="res">
-    <table><thead><tr><th>INDICADORES</th><th>TOTAL</th></tr></thead><tbody id="tb"></tbody></table>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>INDICADORES</th>
+            <th>TOTAL</th>
+          </tr>
+        </thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
     <div class="hint" id="nota"></div>
   </div>
 </div>
